@@ -1,0 +1,14 @@
+faiss-cpu
+huggingface_hub
+langchain
+langchain-community
+langchain-core
+numpy
+opencv-python-headless
+pandas
+pillow
+pdf2image
+pdfminer.six
+rank_bm25
+unstructured
+tqdm
