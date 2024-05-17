@@ -12,6 +12,7 @@ from langchain.retrievers import BM25Retriever, EnsembleRetriever
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain.retrievers.document_compressors import EmbeddingsFilter
+from langchain.retrievers.document_compressors import LLMChainFilter
 from langchain_community.chat_models import ChatOllama
 from langchain_huggingface import HuggingFacePipeline
 from transformers import AutoModelForCausalLM, AutoTokenizer,pipeline
@@ -151,19 +152,26 @@ def main():
             bm25_retriever = load_bm25_retriever()
         print("BM25 Retriever loaded")
         # Create an ensemble retriever with the BM25 and FAISS retrievers
-        # ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5])
+        ensemble_retriever = EnsembleRetriever(retrievers=[bm25_retriever, faiss_retriever], weights=[0.5, 0.5])
 
         compressor = LLMChainExtractor.from_llm(llm)
 
+        _filter = LLMChainFilter.from_llm(llm)
+
         # embeddings_filter = EmbeddingsFilter(embeddings=embedding_model, similarity_threshold=0.76)
 
-        compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=faiss_retriever)
+        # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=faiss_retriever)
+        # compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=ensemble_retriever)
+        # compression_retriever = ContextualCompressionRetriever(base_compressor=embeddings_filter, base_retriever=ensemble_retriever)
+        compression_retriever = ContextualCompressionRetriever(base_compressor=_filter, base_retriever=ensemble_retriever)
 
         test_df = pd.read_csv(csv_path)
         # Iterate through the rows in test_df Dataframe extracting the values in Query text and use it to query the Qdrant collection
         for i, row in tqdm(test_df.iterrows(), total=len(test_df), desc='Processing queries'):
             query_text = row['Query text']
-            search_results = db.similarity_search_with_score(query_text, top_k=5)
+            # search_results = db.similarity_search_with_score(query_text, top_k=5)
+            search_results = ensemble_retriever.get_relevant_documents(query_text)
+            print(search_results)
             
             # Check if we have fewer than 5 results
             num_results = min(len(search_results), 5)
@@ -171,7 +179,7 @@ def main():
             # Add the document contents of the top search results to the test_df DataFrame
             for j in range(num_results):
                 result = search_results[j]
-                doc_content = result[0].page_content
+                doc_content = result.page_content
                 test_df.at[i, f'Output_{j+1}'] = doc_content
             
             # Fill remaining Output columns with empty strings if there are fewer than 5 results
